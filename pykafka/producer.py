@@ -439,13 +439,22 @@ class Producer(object):
         :type message: `pykafka.protocol.Message`
         """
         success = False
+        retry = 0
+        max_retries = self._max_retries * 5
         while not success:
-            leader_id = self._topic.partitions[message.partition_id].leader.id
-            if leader_id in self._owned_brokers:
-                self._owned_brokers[leader_id].enqueue(message)
-                success = True
-            else:
-                success = False
+            with self._update_lock:
+                leader_id = self._topic.partitions[message.partition_id].leader.id
+                if leader_id in self._owned_brokers:
+                    self._owned_brokers[leader_id].enqueue(message)
+                    success = True
+                else:
+                    retry += 1
+                    if retry % self._max_retries == 0:
+                        log.debug("Retries exceeded limit. Updating metadata again.")
+                        self._update()
+                    elif retry > max_retries:
+                        raise KafkaException("Retries exceeded max limit")
+                    success = False
 
     def _mark_as_delivered(self, owned_broker, message_batch, req):
         owned_broker.increment_messages_pending(-1 * len(message_batch))
