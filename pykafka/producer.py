@@ -375,20 +375,20 @@ class Producer(object):
         """
         success = False
         retry = 0
-        max_retries = self._max_retries * 5
         while not success:
             with self._update_lock:
                 leader_id = self._topic.partitions[message.partition_id].leader.id
                 if leader_id in self._owned_brokers:
                     self._owned_brokers[leader_id].enqueue(message)
                     success = True
+            if not success:
+                retry += 1
+                if retry < 10:
+                    log.debug("Failed to enqueue produced message. Updating metdata.")
+                    self._update()
                 else:
-                    retry += 1
-                    if retry % self._max_retries == 0:
-                        log.debug("<RFK> Retries exceeded limit. Updating metadata again.")
-                        self._update()
-                    elif retry > max_retries:
-                        raise KafkaException("Retries exceeded max limit")
+                    raise ProduceFailureError("Message could not be enqueued due to missing broker "
+                                              "metadata for broker {}".format(leader_id))
                     success = False
 
     def _send_request(self, message_batch, owned_broker):
