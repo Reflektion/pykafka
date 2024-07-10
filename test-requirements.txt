@@ -7,3 +7,4 @@ mock
 unittest2
 xxhash==1.0.1
 -e git+https://github.com/Parsely/testinstances.git@0.3.0#egg=testinstances
+zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
